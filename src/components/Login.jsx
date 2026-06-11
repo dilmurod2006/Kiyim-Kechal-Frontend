@@ -21,7 +21,8 @@ function Login() {
     try {
       const user = await login(username.trim(), password);
       toast.success(`Welcome back, ${user.username}`);
-      navigate(user.role === "admin" ? "/admin" : "/customer", { replace: true });
+      const dest = user.role === "admin" ? "/admin" : (location.state?.from?.pathname || "/");
+      navigate(dest, { replace: true });
     } catch (err) {
       const detail = err?.response?.status === 401
         ? "Incorrect username or password."

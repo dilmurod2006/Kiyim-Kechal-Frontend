@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import CategoryApi from "../../api/CategoryApi.jsx";
 import ProductApi from "../../api/ProductApi.jsx";
+import UserApi from "../../api/UserApi.jsx";
 import AddCategoryModal from "./AddCategoryModel.jsx";
 import AddProductModal from "./AddProductModel.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { productImage, handleImageError, formatPrice } from "../../utils/catalog.js";
-import { IconBox, IconTag, IconPlus, IconSparkle } from "../Icons.jsx";
+import { productImage, handleImageError, formatPrice, initials } from "../../utils/catalog.js";
+import { IconBox, IconTag, IconPlus, IconSparkle, IconUser } from "../Icons.jsx";
 
 function AdminDashboard() {
   const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [catModal, setCatModal] = useState(false);
   const [prodModal, setProdModal] = useState(false);
@@ -24,7 +26,13 @@ function AdminDashboard() {
       setCategories(catRes.data || []);
       setProducts(prodRes.data || []);
     } catch (err) {
-      console.error("Failed to load dashboard data:", err);
+      console.error("Failed to load catalogue:", err);
+    }
+    try {
+      const userRes = await UserApi.listUsers();
+      setUsers(userRes.data || []);
+    } catch (err) {
+      console.error("Failed to load users:", err);
     } finally {
       setLoading(false);
     }
@@ -42,13 +50,18 @@ function AdminDashboard() {
     [products]
   );
 
+  const adminCount = useMemo(
+    () => users.filter((u) => u.role === "admin").length,
+    [users]
+  );
+
   return (
     <div className="container">
       <div className="admin-head">
         <div>
           <span className="eyebrow">Atelier Console</span>
           <h1 className="section-title">Welcome, {user?.username}</h1>
-          <p className="section-sub">Manage your catalogue, categories and inventory.</p>
+          <p className="section-sub">Manage your catalogue, categories, members and inventory.</p>
         </div>
         <div className="admin-actions">
           <button className="btn btn-ghost" onClick={() => setCatModal(true)}>
@@ -72,13 +85,18 @@ function AdminDashboard() {
           <div className="stat-l">Categories</div>
         </div>
         <div className="stat-card">
+          <div className="stat-ic"><IconUser width={22} height={22} /></div>
+          <div className="stat-n">{loading ? "—" : users.length}</div>
+          <div className="stat-l">Members</div>
+        </div>
+        <div className="stat-card">
           <div className="stat-ic"><IconSparkle width={22} height={22} /></div>
           <div className="stat-n">{loading ? "—" : formatPrice(avgPrice)}</div>
           <div className="stat-l">Average price</div>
         </div>
       </div>
 
-      <div className="panel">
+      <div className="panel" style={{ marginBottom: 24 }}>
         <div className="panel-head">
           <h3>Recently added</h3>
           <button className="btn btn-ghost" onClick={() => setProdModal(true)}>
@@ -112,6 +130,51 @@ function AdminDashboard() {
                     <td><span className="t-cat">{p.category?.name}</span></td>
                     <td>{formatPrice(p.price)}</td>
                     <td style={{ color: "var(--muted)" }}>MSN-{String(p.id).padStart(4, "0")}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-head">
+          <h3>Members</h3>
+          <span className="section-sub" style={{ margin: 0 }}>
+            {loading ? "" : `${users.length} total · ${adminCount} admin · ${users.length - adminCount} customers`}
+          </span>
+        </div>
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th>Role</th>
+                <th>ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={3} style={{ color: "var(--muted)" }}>Loading…</td></tr>
+              ) : users.length === 0 ? (
+                <tr><td colSpan={3} style={{ color: "var(--muted)" }}>No members found.</td></tr>
+              ) : (
+                users.map((u) => (
+                  <tr key={u.id}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <span className="avatar">{initials(u.username)}</span>
+                        <span className="t-name">
+                          {u.username}
+                          {u.id === user?.id && (
+                            <span style={{ color: "var(--muted)", fontWeight: 400 }}> · you</span>
+                          )}
+                        </span>
+                      </div>
+                    </td>
+                    <td><span className={`role-pill ${u.role === "admin" ? "admin" : ""}`}>{u.role}</span></td>
+                    <td style={{ color: "var(--muted)" }}>#{String(u.id).padStart(3, "0")}</td>
                   </tr>
                 ))
               )}

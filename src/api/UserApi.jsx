@@ -10,6 +10,7 @@ const UserApi = {
   getSession: () => api.get("/api/v1/users/my_session/"),
   signup: (username, password) =>
     api.post("/api/v1/users/", { username, password }),
+  listUsers: () => api.get("/api/v1/users/"),
 };
 
 export default UserApi;

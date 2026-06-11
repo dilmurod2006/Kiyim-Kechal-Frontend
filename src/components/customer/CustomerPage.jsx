@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import ProductApi from "../../api/ProductApi.jsx";
 import CategoryApi from "../../api/CategoryApi.jsx";
 import { useCart } from "../../context/CartContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 import CategoryList from "./CategoryList.jsx";
 import ProductGrid from "./ProductGrid.jsx";
 import ProductModal from "./ProductModal.jsx";
@@ -26,6 +28,9 @@ function CustomerPage() {
 
   const { add, openCart } = useCart();
   const toast = useToast();
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     let alive = true;
@@ -64,6 +69,11 @@ function CustomerPage() {
   }, [products, selectedCat, query, sort]);
 
   const handleAdd = (product, qty = 1) => {
+    if (!isAuthenticated) {
+      toast.show("Please sign in to start shopping");
+      navigate("/login", { state: { from: location } });
+      return;
+    }
     add(product, qty);
     toast.success(`${product.name} added to bag`);
   };

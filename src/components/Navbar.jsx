@@ -25,22 +25,20 @@ function Navbar() {
           <span className="brand-sub">Atelier</span>
         </NavLink>
 
-        {isAuthenticated && (
-          <div className="nav-links">
-            {isAdmin ? (
-              <>
-                <NavLink to="/admin" className="nav-link">Dashboard</NavLink>
-                <NavLink to="/customer" className="nav-link">Storefront</NavLink>
-              </>
-            ) : (
-              <>
-                <NavLink to="/customer" className="nav-link">Shop</NavLink>
-                <a className="nav-link" href="#new">New In</a>
-                <a className="nav-link" href="#about">The House</a>
-              </>
-            )}
-          </div>
-        )}
+        <div className="nav-links">
+          {isAdmin ? (
+            <>
+              <NavLink to="/admin" className="nav-link">Dashboard</NavLink>
+              <NavLink to="/" className="nav-link">Storefront</NavLink>
+            </>
+          ) : (
+            <>
+              <NavLink to="/" end className="nav-link">Shop</NavLink>
+              <a className="nav-link" href="#new">New In</a>
+              <a className="nav-link" href="#about">The House</a>
+            </>
+          )}
+        </div>
 
         <div className="nav-right">
           {isAuthenticated ? (

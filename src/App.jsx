@@ -20,22 +20,13 @@ function FullLoader() {
   );
 }
 
-// Redirect "/" based on auth state and role.
-function HomeRedirect() {
-  const { loading, isAuthenticated, isAdmin } = useAuth();
-  if (loading) return <FullLoader />;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-  return <Navigate to={isAdmin ? "/admin" : "/customer"} replace />;
-}
-
-// Generic guard: requires auth, and optionally a role.
-function Protected({ role, children }) {
+// Admin guard: requires an authenticated admin. Everyone else is redirected.
+function AdminRoute({ children }) {
   const { loading, isAuthenticated, isAdmin } = useAuth();
   const location = useLocation();
   if (loading) return <FullLoader />;
   if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location }} />;
-  if (role === "admin" && !isAdmin) return <Navigate to="/customer" replace />;
-  if (role === "customer" && isAdmin) return <Navigate to="/admin" replace />;
+  if (!isAdmin) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -43,7 +34,7 @@ function Protected({ role, children }) {
 function GuestOnly({ children }) {
   const { loading, isAuthenticated, isAdmin } = useAuth();
   if (loading) return <FullLoader />;
-  if (isAuthenticated) return <Navigate to={isAdmin ? "/admin" : "/customer"} replace />;
+  if (isAuthenticated) return <Navigate to={isAdmin ? "/admin" : "/"} replace />;
   return children;
 }
 
@@ -65,17 +56,13 @@ function Shell() {
       <Navbar />
       <main className="app-main">
         <Routes>
-          <Route path="/" element={<HomeRedirect />} />
+          {/* Public storefront — anyone can browse without signing in */}
+          <Route path="/" element={<CustomerPage />} />
+          <Route path="/customer" element={<Navigate to="/" replace />} />
           <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />
           <Route path="/signup" element={<GuestOnly><Signup /></GuestOnly>} />
-          <Route
-            path="/customer"
-            element={<Protected role="customer"><CustomerPage /></Protected>}
-          />
-          <Route
-            path="/admin"
-            element={<Protected role="admin"><AdminDashboard /></Protected>}
-          />
+          {/* Admin console — requires an admin login */}
+          <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
