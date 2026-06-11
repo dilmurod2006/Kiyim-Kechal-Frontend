@@ -1,48 +1,140 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from "react";
 import ProductApi from "../../api/ProductApi.jsx";
-import CategoryList from './CategoryList';
-import ProductGrid from './ProductGrid';
+import CategoryApi from "../../api/CategoryApi.jsx";
+import { useCart } from "../../context/CartContext.jsx";
+import { useToast } from "../../context/ToastContext.jsx";
+import CategoryList from "./CategoryList.jsx";
+import ProductGrid from "./ProductGrid.jsx";
+import ProductModal from "./ProductModal.jsx";
+import { IconSearch, IconArrowRight } from "../Icons.jsx";
+
+const SORTS = {
+  featured: { label: "Featured", fn: (a, b) => a.id - b.id },
+  "price-asc": { label: "Price: Low to High", fn: (a, b) => a.price - b.price },
+  "price-desc": { label: "Price: High to Low", fn: (a, b) => b.price - a.price },
+  name: { label: "Alphabetical", fn: (a, b) => a.name.localeCompare(b.name) },
+};
 
 function CustomerPage() {
   const [products, setProducts] = useState([]);
-  const [title, setTitle] = useState('Our Star Products');
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCat, setSelectedCat] = useState(null);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState("featured");
+  const [active, setActive] = useState(null); // product open in modal
+
+  const { add, openCart } = useCart();
+  const toast = useToast();
 
   useEffect(() => {
-    // Fetch all products on initial load
-    const loadAllProducts = async () => {
+    let alive = true;
+    (async () => {
+      setLoading(true);
       try {
-        const response = await ProductApi.fetchAllProducts();
-        setProducts(response.data);
-      } catch (error) {
-        console.error("Failed to fetch products:", error);
+        const [prodRes, catRes] = await Promise.all([
+          ProductApi.fetchAllProducts(),
+          CategoryApi.fetchCategory(),
+        ]);
+        if (!alive) return;
+        setProducts(prodRes.data || []);
+        setCategories(catRes.data || []);
+      } catch {
+        if (alive) toast.error("Couldn’t load the collection.");
+      } finally {
+        if (alive) setLoading(false);
       }
-    };
-    loadAllProducts();
-  }, []);
+    })();
+    return () => { alive = false; };
+  }, [toast]);
 
-  const handleCategorySelect = async (category) => {
-    if (!category) {
-        // If "All" is selected or component mounts
-        const response = await ProductApi.fetchAllProducts();
-        setProducts(response.data);
-        setTitle('Our Star Products');
-    } else {
-        try {
-            const response = await ProductApi.fetchProductsByCategory(category.id);
-            setProducts(response.data);
-            setTitle(`Products in ${category.name}`);
-        } catch (error) {
-            console.error("Failed to fetch products by category:", error);
-            setProducts([]); // Clear products on error
-        }
+  const visible = useMemo(() => {
+    let list = products;
+    if (selectedCat != null) list = list.filter((p) => p.category?.id === selectedCat);
+    const q = query.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          p.description.toLowerCase().includes(q) ||
+          p.category?.name?.toLowerCase().includes(q)
+      );
     }
+    return [...list].sort(SORTS[sort].fn);
+  }, [products, selectedCat, query, sort]);
+
+  const handleAdd = (product, qty = 1) => {
+    add(product, qty);
+    toast.success(`${product.name} added to bag`);
   };
 
   return (
-    <div>
-      <CategoryList onCategorySelect={handleCategorySelect} />
-      <h1 className="page-title">{title}</h1>
-      <ProductGrid products={products} />
+    <div className="container">
+      {/* Hero */}
+      <section className="hero" id="new">
+        <div className="hero-art" />
+        <div className="hero-inner">
+          <span className="eyebrow" style={{ color: "var(--gold)" }}>Spring / Summer Edit</span>
+          <h1>Considered clothing, made to last.</h1>
+          <p>
+            A curated wardrobe of timeless essentials — natural fabrics, honest
+            construction, and pieces designed to stay with you for years.
+          </p>
+          <div className="hero-actions">
+            <a className="btn btn-accent btn-lg" href="#collection">
+              Shop the collection <IconArrowRight width={18} height={18} />
+            </a>
+            <button className="btn btn-ghost btn-lg" style={{ color: "#fff", borderColor: "rgba(255,255,255,.4)" }} onClick={openCart}>
+              View bag
+            </button>
+          </div>
+          <div className="hero-stats">
+            <div className="hero-stat"><div className="n">{products.length || "—"}</div><div className="l">Pieces</div></div>
+            <div className="hero-stat"><div className="n">{categories.length || "—"}</div><div className="l">Categories</div></div>
+            <div className="hero-stat"><div className="n">100%</div><div className="l">Considered</div></div>
+          </div>
+        </div>
+      </section>
+
+      {/* Collection header */}
+      <div id="collection" style={{ marginBottom: 18 }}>
+        <span className="eyebrow">The Collection</span>
+        <h2 className="section-title">
+          {selectedCat
+            ? categories.find((c) => c.id === selectedCat)?.name
+            : "All Pieces"}
+        </h2>
+      </div>
+
+      {/* Category chips */}
+      <CategoryList categories={categories} selected={selectedCat} onSelect={setSelectedCat} />
+
+      {/* Toolbar */}
+      <div className="toolbar">
+        <div className="search">
+          <IconSearch width={18} height={18} />
+          <input
+            placeholder="Search pieces, fabrics, categories…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <select className="sort-select" value={sort} onChange={(e) => setSort(e.target.value)}>
+          {Object.entries(SORTS).map(([k, v]) => (
+            <option key={k} value={k}>{v.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {!loading && (
+        <p className="section-sub" style={{ marginBottom: 18 }}>
+          {visible.length} {visible.length === 1 ? "piece" : "pieces"}
+        </p>
+      )}
+
+      <ProductGrid products={visible} loading={loading} onOpen={setActive} onAdd={handleAdd} />
+
+      <ProductModal product={active} onClose={() => setActive(null)} onAdd={handleAdd} />
     </div>
   );
 }

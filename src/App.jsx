@@ -1,131 +1,102 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Navbar from './components/Navbar';
-import AdminDashboard from './components/admin/AdminDashboard.jsx';
-import CustomerPage from './components/customer/CustomerPage.jsx';
-import Login from './components/Login.jsx';
-import Signup from './components/Signup.jsx';
-import api from './api/ApiService.jsx';
-import './App.css'
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import Navbar from "./components/Navbar.jsx";
+import Footer from "./components/Footer.jsx";
+import CartDrawer from "./components/customer/CartDrawer.jsx";
+import AdminDashboard from "./components/admin/AdminDashboard.jsx";
+import CustomerPage from "./components/customer/CustomerPage.jsx";
+import Login from "./components/Login.jsx";
+import Signup from "./components/Signup.jsx";
+import { AuthProvider, useAuth } from "./context/AuthContext.jsx";
+import { CartProvider } from "./context/CartContext.jsx";
+import { ToastProvider } from "./context/ToastContext.jsx";
+import "./App.css";
 
-// Redirects "/" to login or dashboard based on JWT and role
+function FullLoader() {
+  return (
+    <div className="page-loader">
+      <span className="spinner dark" />
+    </div>
+  );
+}
+
+// Redirect "/" based on auth state and role.
 function HomeRedirect() {
-  const [redirect, setRedirect] = React.useState(null);
-
-  React.useEffect(() => {
-    const token = sessionStorage.getItem("jwt_token");
-    if (!token) {
-      setRedirect("/login");
-      return;
-    }
-    api.get("/api/v1/users/my_session/", {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => {
-        if (res.data.role === "admin") {
-          setRedirect("/admin");
-        } else {
-          setRedirect("/customer");
-        }
-      })
-      .catch(() => {
-        setRedirect("/login");
-      });
-  }, []);
-
-  if (redirect) return <Navigate to={redirect} replace />;
-  return <div>Loading...</div>;
+  const { loading, isAuthenticated, isAdmin } = useAuth();
+  if (loading) return <FullLoader />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <Navigate to={isAdmin ? "/admin" : "/customer"} replace />;
 }
 
-// Protects admin route
-function AdminRoute({ children }) {
-  const [auth, setAuth] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    const token = sessionStorage.getItem("jwt_token");
-    if (!token) {
-      setAuth(false);
-      setLoading(false);
-      return;
-    }
-    api.get("/api/v1/users/my_session/", {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => {
-        setAuth(res.data.role === "admin");
-        setLoading(false);
-      })
-      .catch(() => {
-        setAuth(false);
-        setLoading(false);
-      });
-  }, []);
-
-  if (loading) return <div>Loading...</div>;
-  if (!auth) return <div className="container"><h2>This page is for admin only.</h2></div>;
+// Generic guard: requires auth, and optionally a role.
+function Protected({ role, children }) {
+  const { loading, isAuthenticated, isAdmin } = useAuth();
+  const location = useLocation();
+  if (loading) return <FullLoader />;
+  if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location }} />;
+  if (role === "admin" && !isAdmin) return <Navigate to="/customer" replace />;
+  if (role === "customer" && isAdmin) return <Navigate to="/admin" replace />;
   return children;
 }
 
-// Protects customer route
-function CustomerRoute({ children }) {
-  const [auth, setAuth] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    const token = sessionStorage.getItem("jwt_token");
-    if (!token) {
-      setAuth(false);
-      setLoading(false);
-      return;
-    }
-    api.get("/api/v1/users/my_session/", {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => {
-        setAuth(res.data.role !== "admin");
-        setLoading(false);
-      })
-      .catch(() => {
-        setAuth(false);
-        setLoading(false);
-      });
-  }, []);
-
-  if (loading) return <div>Loading...</div>;
-  if (!auth) return <div className="container"><h2>This page is for customers only.</h2></div>;
+// Keep authenticated users away from the auth pages.
+function GuestOnly({ children }) {
+  const { loading, isAuthenticated, isAdmin } = useAuth();
+  if (loading) return <FullLoader />;
+  if (isAuthenticated) return <Navigate to={isAdmin ? "/admin" : "/customer"} replace />;
   return children;
+}
+
+function NotFound() {
+  return (
+    <div className="container">
+      <div className="state">
+        <div className="state-ic">✕</div>
+        <h3>Page not found</h3>
+        <p>The page you’re looking for doesn’t exist.</p>
+      </div>
+    </div>
+  );
+}
+
+function Shell() {
+  return (
+    <>
+      <Navbar />
+      <main className="app-main">
+        <Routes>
+          <Route path="/" element={<HomeRedirect />} />
+          <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />
+          <Route path="/signup" element={<GuestOnly><Signup /></GuestOnly>} />
+          <Route
+            path="/customer"
+            element={<Protected role="customer"><CustomerPage /></Protected>}
+          />
+          <Route
+            path="/admin"
+            element={<Protected role="admin"><AdminDashboard /></Protected>}
+          />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
+      <Footer />
+      <CartDrawer />
+    </>
+  );
 }
 
 function App() {
   return (
     <Router>
-      <Navbar />
-      <main className='container'>
-        <Routes>
-          <Route path="/" element={<HomeRedirect />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route
-            path="/admin"
-            element={
-              <AdminRoute>
-                <AdminDashboard />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/customer"
-            element={
-              <CustomerRoute>
-                <CustomerPage />
-              </CustomerRoute>
-            }
-          />
-        </Routes>
-      </main>
+      <ToastProvider>
+        <AuthProvider>
+          <CartProvider>
+            <Shell />
+          </CartProvider>
+        </AuthProvider>
+      </ToastProvider>
     </Router>
   );
 }
 
-export default App
+export default App;

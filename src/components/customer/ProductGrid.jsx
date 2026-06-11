@@ -1,21 +1,40 @@
-import React from 'react';
+import React from "react";
+import ProductCard from "./ProductCard.jsx";
 
-function ProductGrid({ products }) {
+function SkeletonCard() {
+  return (
+    <div className="skeleton-card">
+      <div className="sk sk-media" />
+      <div className="sk sk-line" style={{ width: "40%" }} />
+      <div className="sk sk-line" style={{ width: "75%" }} />
+      <div className="sk sk-line" style={{ width: "55%", marginBottom: 20 }} />
+    </div>
+  );
+}
+
+function ProductGrid({ products, loading, onOpen, onAdd }) {
+  if (loading) {
+    return (
+      <div className="product-grid">
+        {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
+      </div>
+    );
+  }
+
   if (!products.length) {
-    return <p>No products found.</p>;
+    return (
+      <div className="state">
+        <div className="state-ic">⌀</div>
+        <h3>No pieces found</h3>
+        <p>Try a different category or search term.</p>
+      </div>
+    );
   }
 
   return (
     <div className="product-grid">
-      {products.map((product) => (
-        <div key={product.id} className="product-card">
-          <div className="product-info">
-            <h3>{product.name}</h3>
-            <p className="product-desc">{product.description}</p>
-            <p className="product-price">${product.price.toFixed(2)}</p>
-            <span className="product-category">{product.category.name}</span>
-          </div>
-        </div>
+      {products.map((p) => (
+        <ProductCard key={p.id} product={p} onOpen={onOpen} onAdd={onAdd} />
       ))}
     </div>
   );

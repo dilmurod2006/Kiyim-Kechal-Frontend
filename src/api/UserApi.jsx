@@ -7,10 +7,7 @@ const UserApi = {
     formData.append("password", password);
     return api.post("/api/v1/users/token", formData);
   },
-  getSession: (token) =>
-    api.get("/api/v1/users/my_session/", {
-      headers: { Authorization: `Bearer ${token}` },
-    }),
+  getSession: () => api.get("/api/v1/users/my_session/"),
   signup: (username, password) =>
     api.post("/api/v1/users/", { username, password }),
 };

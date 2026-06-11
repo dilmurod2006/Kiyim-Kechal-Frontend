@@ -1,85 +1,116 @@
-import React, { useState , useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import ProductApi from "../../api/ProductApi.jsx";
 import CategoryApi from "../../api/CategoryApi.jsx";
+import { useToast } from "../../context/ToastContext.jsx";
+import { formatPrice } from "../../utils/catalog.js";
+import { IconClose } from "../Icons.jsx";
+
+const EMPTY = { name: "", description: "", price: "", image_url: "", category_id: "" };
 
 function AddProductModal({ isOpen, onClose, onSuccess }) {
   const [categories, setCategories] = useState([]);
-  const [productData, setProductData] = useState({
-    name: '',
-    description: '',
-    price: '',
-    category_id: '',
-  });
+  const [data, setData] = useState(EMPTY);
+  const [loading, setLoading] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
-    if (isOpen) {
-      const loadCategories = async () => {
-        try {
-          const res = await CategoryApi.fetchCategory();
-          setCategories(res.data);
-          // Set a default category if available
-          if (res.data.length > 0) {
-            setProductData(pd => ({ ...pd, category_id: parseInt(res.data[0].id) }));
-          }
-        } catch (error) {
-          console.error("Failed to load categories:", error);
-          // Handle category loading error, maybe show a message to the user
+    if (!isOpen) return;
+    setData(EMPTY);
+    CategoryApi.fetchCategory()
+      .then((res) => {
+        setCategories(res.data || []);
+        if (res.data?.length) {
+          setData((d) => ({ ...d, category_id: res.data[0].id }));
         }
-      };
-      loadCategories();
-    }
-  }, [isOpen]);
+      })
+      .catch(() => toast.error("Couldn’t load categories."));
+  }, [isOpen, toast]);
 
   if (!isOpen) return null;
 
-  const handleChange = (e) => {
+  const change = (e) => {
     const { name, value } = e.target;
-    setProductData(prev => ({ ...prev, [name]: value }));
+    setData((d) => ({ ...d, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!data.category_id) { toast.error("Please select a category first."); return; }
+    setLoading(true);
     try {
-      // Send productData directly, without the extra 'productData' key
       await ProductApi.createProduct({
-        ...productData,
-        price: parseFloat(productData.price),
-        category_id: parseInt(productData.category_id, 10) // Ensure category_id is an integer
+        name: data.name.trim(),
+        description: data.description.trim(),
+        price: parseFloat(data.price),
+        image_url: data.image_url.trim() || null,
+        category_id: parseInt(data.category_id, 10),
       });
-      alert('Product created successfully!');
-      onSuccess();
+      toast.success("Product created");
+      onSuccess?.();
       onClose();
-    } catch (error) {
-      console.error('Failed to create product:', error);
-      // Log more specific error details if available from the backend
-      if (error.response && error.response.data && error.response.data.detail) {
-        console.error("Validation errors:", error.response.data.detail);
-        alert(`Failed to create product: ${error.response.data.detail.map(err => err.msg).join(", ")}`);
-      } else {
-        alert('Failed to create product. Please check console for details.');
-      }
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      const msg = Array.isArray(detail)
+        ? detail.map((d) => d.msg).join(", ")
+        : detail || "Failed to create product.";
+      toast.error(msg);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal-content">
-        <h2>Add New Product</h2>
-        <form onSubmit={handleSubmit}>
-          <select name="category_id" value={productData.category_id} onChange={handleChange} required>
-            <option value="" disabled>Select a Category</option>
-            {categories.map(cat => (
-              <option key={cat.id} value={cat.id}>{cat.name}</option>
-            ))}
-          </select>
-          <input name="name" value={productData.name} onChange={handleChange} placeholder="Product Name" required />
-          <textarea name="description" value={productData.description} onChange={handleChange} placeholder="Description" required />
-          <input type="number" name="price" value={productData.price} onChange={handleChange} placeholder="Price" required />
-          <div className="modal-actions">
-            <button type="submit">Create Product</button>
-            <button type="button" onClick={onClose}>Cancel</button>
-          </div>
-        </form>
+    <div className="backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>New product</h2>
+          <button className="modal-x" onClick={onClose}><IconClose width={18} height={18} /></button>
+        </div>
+        <div className="modal-body">
+          {categories.length === 0 ? (
+            <div className="form-note">
+              Create a category first — products need one to belong to.
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit}>
+              <div className="field">
+                <label htmlFor="p-cat">Category</label>
+                <select id="p-cat" className="select" name="category_id" value={data.category_id} onChange={change} required>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="p-name">Product name</label>
+                <input id="p-name" className="input" name="name" value={data.name} onChange={change} placeholder="e.g. Merino Wool Crew Sweater" required />
+              </div>
+              <div className="field">
+                <label htmlFor="p-desc">Description</label>
+                <textarea id="p-desc" className="textarea" name="description" value={data.description} onChange={change} placeholder="Fabric, fit and finish…" required />
+              </div>
+              <div className="field">
+                <label htmlFor="p-img">Image URL <span style={{ textTransform: "none", color: "var(--muted)", fontWeight: 400 }}>(optional)</span></label>
+                <input id="p-img" className="input" name="image_url" value={data.image_url} onChange={change} placeholder="https://… (leave blank for an auto lookbook tile)" />
+              </div>
+              <div className="field">
+                <label htmlFor="p-price">Price (USD)</label>
+                <input id="p-price" className="input" type="number" min="0" step="0.01" name="price" value={data.price} onChange={change} placeholder="89.00" required />
+                {data.price && (
+                  <p className="section-sub" style={{ marginTop: 6 }}>
+                    Displays as {formatPrice(parseFloat(data.price) || 0)}
+                  </p>
+                )}
+              </div>
+              <div className="modal-actions">
+                <button className="btn btn-primary" type="submit" disabled={loading}>
+                  {loading ? <span className="spinner" /> : "Create product"}
+                </button>
+                <button className="btn btn-ghost" type="button" onClick={onClose}>Cancel</button>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );
